@@ -29,6 +29,13 @@ models:
       - dbt_utils.expression_is_true:
           expression: "covered_cost_gbp <= estimated_cost_gbp"   # V2: arguments go under `arguments:`
 
+  - name: claims_by_month
+    desciption: Claims per month and triage outcome.   # V2: misspelt key is an error in v2
+    data_tests:                       # `data_tests:` is the 1.8+ name for `tests:` (both work in v2)
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [claim_month, triage_outcome]
+
 exposures:
   - name: Claims Dashboard            # V2: exposure names: letters, digits, _ only
     type: dashboard

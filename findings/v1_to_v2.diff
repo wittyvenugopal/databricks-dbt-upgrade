@@ -1,9 +1,12 @@
 diff --git a/dbt_project/dbt_project.yml b/dbt_project/dbt_project.yml
 --- a/dbt_project/dbt_project.yml
 +++ b/dbt_project/dbt_project.yml
-@@ -5,16 +5,13 @@
+@@ -4,18 +4,15 @@ name: dbt_upgrade_lab
+ version: "1.0.0"
  profile: dbt_upgrade_lab
  config-version: 2
+-require-dbt-version: [">=1.10.0", "<2.0.0"]   # V2: ignored by dbt v2 (no error) - widen to <3.0.0
++require-dbt-version: [">=1.10.0", "<3.0.0"]
  
 -source-paths: ["models"]            # V2: renamed to model-paths
 -data-paths: ["seeds"]               # V2: renamed to seed-paths
@@ -21,7 +24,7 @@ diff --git a/dbt_project/dbt_project.yml b/dbt_project/dbt_project.yml
  vars:
    min_cover_gbp: 10000
  
-@@ -25,9 +22,12 @@
+@@ -26,9 +23,12 @@ seeds:
  models:
    dbt_upgrade_lab:
      staging:
@@ -74,7 +77,7 @@ diff --git a/dbt_project/macros/product_channel_pairs.sql b/dbt_project/macros/p
 diff --git a/dbt_project/models/marts/_marts.yml b/dbt_project/models/marts/_marts.yml
 --- a/dbt_project/models/marts/_marts.yml
 +++ b/dbt_project/models/marts/_marts.yml
-@@ -8,7 +8,8 @@
+@@ -8,7 +8,8 @@ models:
  
    - name: dim_policy
      config:
@@ -84,7 +87,7 @@ diff --git a/dbt_project/models/marts/_marts.yml b/dbt_project/models/marts/_mar
      columns:
        - name: policy_sk
          tests: [unique, not_null]
-@@ -21,16 +22,17 @@
+@@ -21,23 +22,24 @@ models:
          description: '{{ doc("triage_outcome") }}'
          tests:
            - accepted_values:
@@ -101,6 +104,14 @@ diff --git a/dbt_project/models/marts/_marts.yml b/dbt_project/models/marts/_mar
 -
 +          arguments:
 +            expression: "covered_cost_gbp <= estimated_cost_gbp"
+   - name: claims_by_month
+-    desciption: Claims per month and triage outcome.   # V2: misspelt key is an error in v2
+     data_tests:                       # `data_tests:` is the 1.8+ name for `tests:` (both work in v2)
+       - dbt_utils.unique_combination_of_columns:
+           arguments:
+             combination_of_columns: [claim_month, triage_outcome]
+ 
++    description: Claims per month and triage outcome.
  exposures:
 -  - name: Claims Dashboard            # V2: exposure names: letters, digits, _ only
 +  - name: Claims_Dashboard            # V2: exposure names: letters, digits, _ only
@@ -109,6 +120,31 @@ diff --git a/dbt_project/models/marts/_marts.yml b/dbt_project/models/marts/_mar
 -    depends_on: [ref('claims_by_month')]
 +    depends_on: [ref('claims_by_month')]
 \ No newline at end of file
+diff --git a/dbt_project/models/marts/claims_by_month.sql b/dbt_project/models/marts/claims_by_month.sql
+--- a/dbt_project/models/marts/claims_by_month.sql
++++ b/dbt_project/models/marts/claims_by_month.sql
+@@ -4,7 +4,6 @@ select
+     count(*)                                         as claims,
+     sum(estimated_cost_gbp)                          as estimated_cost_gbp,
+     round(avg(days_since_policy_start), 1)           as avg_days_since_policy_start,
+-    -- V2: pytz object attributes render as '' in v2 (no error) - use a plain string or a var
+-    '{{ modules.pytz.timezone("Europe/London").zone }}' as report_timezone
++    'Europe/London'                                  as report_timezone
+ from {{ ref('fct_claims') }}
+ group by all
+diff --git a/dbt_project/models/marts/claims_summary_py.py b/dbt_project/models/marts/claims_summary_py.py
+--- a/dbt_project/models/marts/claims_summary_py.py
++++ b/dbt_project/models/marts/claims_summary_py.py
+@@ -1,8 +1,4 @@
+ # Python model: claims per triage outcome. Runs on Databricks serverless compute.
+ def model(dbt, session):
+-    dbt.config(
+-        materialized="table",
+-        submission_method="serverless_cluster",
+-        data_owner="claims_team",  # V2: custom key in config, must move under meta
+-    )
++    dbt.config(materialized="table", submission_method="serverless_cluster", meta={"data_owner": "claims_team"})
+     return dbt.ref("fct_claims").groupBy("triage_outcome").count()
 diff --git a/dbt_project/models/marts/dim_policy.sql b/dbt_project/models/marts/dim_policy.sql
 --- a/dbt_project/models/marts/dim_policy.sql
 +++ b/dbt_project/models/marts/dim_policy.sql
@@ -124,7 +160,7 @@ diff --git a/dbt_project/models/marts/dim_policy.sql b/dbt_project/models/marts/
 diff --git a/dbt_project/models/staging/_staging.yml b/dbt_project/models/staging/_staging.yml
 --- a/dbt_project/models/staging/_staging.yml
 +++ b/dbt_project/models/staging/_staging.yml
-@@ -1,51 +1,60 @@
+@@ -1,67 +1,83 @@
  version: 2
 -
 -team_notes:                           # V2: custom top-level key
@@ -210,6 +246,53 @@ diff --git a/dbt_project/models/staging/_staging.yml b/dbt_project/models/stagin
 +          - not_null
        - name: dispute_category
 -        tests: [not_null]             # every dispute type has a lookup row
+-
+-# Unit test (dbt 1.8+): fixed input rows -> expected output, checks the model's logic, not the data.
 +        tests:
 +          - not_null
+ unit_tests:
+   - name: stg_claims_cleans_codes_and_converts_pence
+     model: stg_claims
+     given:
+       - input: ref('claims')
+         rows:
+-          - {claim_id: C1, policy_id: P1, intake_channel: " helpline ", received_at: "2026-06-01 09:12:00",
+-             dispute_type: neighbour, estimated_cost_pence: 120000}
++          - claim_id: C1
++            policy_id: P1
++            intake_channel: ' helpline '
++            received_at: '2026-06-01 09:12:00'
++            dispute_type: neighbour
++            estimated_cost_pence: 120000
+       - input: ref('dispute_types')
+         rows:
+-          - {dispute_type: neighbour, category: property, refer_to_law_firm: "false"}
++          - dispute_type: neighbour
++            category: property
++            refer_to_law_firm: 'false'
+     expect:
+       rows:
+-        - {claim_id: C1, intake_channel: HELPLINE, dispute_category: PROPERTY, estimated_cost_gbp: 1200.00}
++        - claim_id: C1
++          intake_channel: HELPLINE
++          dispute_category: PROPERTY
++          estimated_cost_gbp: 1200.0
 \ No newline at end of file
+diff --git a/dbt_project/models/staging/dispute_types.sql b/dbt_project/models/staging/dispute_types.sql
+deleted file mode 100644
+--- a/dbt_project/models/staging/dispute_types.sql
++++ /dev/null
+@@ -1,5 +0,0 @@
+--- Dispute types seen on claims.
+--- V2: same name as the seed dispute_types. v1 warns and ref('dispute_types') picks the seed;
+--- v2 stops with "ambiguous ref". Rename the model (stg_dispute_types_seen).
+-select distinct dispute_type
+-from {{ ref('claims') }}
+diff --git a/dbt_project/models/staging/stg_dispute_types_seen.sql b/dbt_project/models/staging/stg_dispute_types_seen.sql
+new file mode 100644
+--- /dev/null
++++ b/dbt_project/models/staging/stg_dispute_types_seen.sql
+@@ -0,0 +1,3 @@
++-- Dispute types seen on claims.
++select distinct dispute_type
++from {{ ref('claims') }}

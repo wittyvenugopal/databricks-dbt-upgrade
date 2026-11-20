@@ -4,6 +4,7 @@ name: dbt_upgrade_lab
 version: "1.0.0"
 profile: dbt_upgrade_lab
 config-version: 2
+require-dbt-version: [">=1.10.0", "<2.0.0"]   # V2: ignored by dbt v2 (no error) - widen to <3.0.0
 
 source-paths: ["models"]            # V2: renamed to model-paths
 data-paths: ["seeds"]               # V2: renamed to seed-paths

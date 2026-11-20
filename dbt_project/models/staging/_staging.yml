@@ -49,3 +49,19 @@ models:
         tests: [unique, not_null]
       - name: dispute_category
         tests: [not_null]             # every dispute type has a lookup row
+
+# Unit test (dbt 1.8+): fixed input rows -> expected output, checks the model's logic, not the data.
+unit_tests:
+  - name: stg_claims_cleans_codes_and_converts_pence
+    model: stg_claims
+    given:
+      - input: ref('claims')
+        rows:
+          - {claim_id: C1, policy_id: P1, intake_channel: " helpline ", received_at: "2026-06-01 09:12:00",
+             dispute_type: neighbour, estimated_cost_pence: 120000}
+      - input: ref('dispute_types')
+        rows:
+          - {dispute_type: neighbour, category: property, refer_to_law_firm: "false"}
+    expect:
+      rows:
+        - {claim_id: C1, intake_channel: HELPLINE, dispute_category: PROPERTY, estimated_cost_gbp: 1200.00}
