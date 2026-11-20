@@ -27,9 +27,20 @@ built everything (33/33) with output identical to dbt 1.12.**
 | Tests | built-in (`unique`, `not_null`, `accepted_values`, `relationships`), `dbt_utils.expression_is_true`, a custom generic test (`positive_value`), a singular test |
 | Package | `dbt_utils` |
 
-## Check a project locally – step by step
+## Check any dbt project locally – step by step
 
-Do this on a git branch. Windows commands shown (`.venv\Scripts\activate`); on Mac/Linux use `source .venv/bin/activate`.
+The steps work on any dbt 1.x project, this one or yours. Do it on a **git branch**: autofix edits files in place.
+Windows commands shown (`.venv\Scripts\activate`); on Mac/Linux use `source .venv/bin/activate`.
+
+Set these once for your project (the values shown are for this repo):
+
+| | This repo | Your project |
+|---|---|---|
+| Project folder | `dbt_project` | the folder with your `dbt_project.yml` |
+| Profiles | `--profiles-dir ../local` | leave it out if you use `~/.dbt/profiles.yml`; the profile name must match `profile:` in `dbt_project.yml` |
+| Adapter | `dbt-databricks` | your adapter, e.g. `dbt-snowflake` (check dbt v2 supports it) |
+
+The commands below use this repo's values – swap in yours.
 
 **0. Install dbt 1.12 + autofix** (keep the folder path short on Windows – long paths break the install)
 ```
@@ -44,7 +55,7 @@ dbt deps --profiles-dir ../local
 ```
 dbt parse --profiles-dir ../local --no-partial-parse --show-all-deprecations
 ```
-The summary at the end is your to-do list (this project: 14 deprecation types).
+The summary at the end is your to-do list (this repo: 14 deprecation types).
 
 **2. Packages**
 ```
@@ -64,11 +75,15 @@ git diff
 dbt parse --profiles-dir ../local --use-v2-parser
 ```
 
-**5. Real dbt v2** in a second venv – the only step that finds every problem
+**5. Real dbt v2** in a second venv – the only step that finds every problem.
+Keep it separate: dbt 1.12 and dbt v2 both install a `dbt` command.
 ```
+deactivate
+cd ..
 python -m venv .venv2
 .venv2\Scripts\activate
 pip install dbt
+cd dbt_project
 dbt parse   --profiles-dir ../local
 dbt compile --profiles-dir ../local      # needs a connection, see below
 dbt build   --profiles-dir ../local
@@ -76,7 +91,13 @@ dbt build   --profiles-dir ../local
 For compile/build set `DATABRICKS_HOST` (no https://), `DATABRICKS_HTTP_PATH` (SQL warehouse → Connection
 details) and `DATABRICKS_TOKEN`. In PowerShell: `$env:DATABRICKS_HOST = "..."`.
 
+Build v2 into a **different schema** from v1 (another target or schema in your profile), or it overwrites the
+v1 tables you want to compare against.
+
 **6. Compare** the v1 and v2 tables (row counts, or `select * from a except all select * from b`).
+
+**7. Outside the project** – check job definitions, CI and scripts by hand (e.g. `-m` → `-s`);
+`dbt-autofix jobs` only covers dbt Cloud jobs.
 
 ## Findings
 
