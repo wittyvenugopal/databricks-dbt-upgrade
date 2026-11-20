@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: dim_customer
+    columns:
+      - name: customer_sk
+        tests: [unique, not_null]
+
+  - name: dim_policy
+    config:
+      contains_pii: false             # V2: custom config key, must move under meta
+    columns:
+      - name: policy_sk
+        tests: [unique, not_null]
+
+  - name: fct_claims
+    columns:
+      - name: claim_id
+        tests: [unique, not_null]
+      - name: triage_outcome
+        description: '{{ doc("triage_outcome") }}'
+        tests:
+          - accepted_values:
+              values: ['DECLINED', 'REFER_TO_LAW_FIRM', 'HELPLINE_ADVICE']
+      - name: policy_sk
+        tests:
+          - relationships: {to: ref('dim_policy'), field: policy_sk}
+    tests:
+      - dbt_utils.expression_is_true:
+          expression: "covered_cost_gbp <= estimated_cost_gbp"   # V2: arguments go under `arguments:`
+
+exposures:
+  - name: Claims Dashboard            # V2: exposure names: letters, digits, _ only
+    type: dashboard
+    owner: {name: Claims BI, email: claims-bi@example.com}
+    depends_on: [ref('claims_by_month')]

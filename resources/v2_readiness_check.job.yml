@@ -1,0 +1,26 @@
+# One serverless dbt task. Commands run in order and the job stops at the first failure.
+# Red on the last command = the project is not v2-ready yet.
+resources:
+  jobs:
+    v2_readiness_check:
+      name: dbt v2 readiness check
+      environments:
+        - environment_key: dbt
+          spec:
+            environment_version: "2"
+            dependencies:
+              - dbt-core>=1.12,<1.13          # --use-v2-parser needs 1.12
+              - dbt-databricks>=1.12,<2
+      tasks:
+        - task_key: build_on_1_12_then_v2_parse
+          environment_key: dbt
+          dbt_task:
+            project_directory: ../dbt_project
+            warehouse_id: ${var.warehouse_id}
+            catalog: ${var.catalog}
+            schema: dbt_upgrade_lab_${workspace.current_user.short_name}
+            commands:
+              - dbt deps
+              - dbt build                       # works on 1.12; prints the deprecation summary
+              - dbt run -m fct_claims           # V2: -m / --models removed, use -s
+              - dbt parse --use-v2-parser       # the v2 check

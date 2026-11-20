@@ -1,0 +1,22 @@
+# Databricks Asset Bundle: one job that builds the dbt project on dbt 1.12 and then checks it with the v2 parser.
+#   databricks bundle deploy -p <your-cli-profile>
+#   databricks bundle run v2_readiness_check -p <your-cli-profile>
+bundle:
+  name: dbt-v2-upgrade-lab
+
+include:
+  - resources/*.yml
+
+variables:
+  warehouse_id:
+    description: SQL warehouse the dbt task runs on (found by name)
+    lookup:
+      warehouse: Serverless Starter Warehouse
+  catalog:
+    description: Unity Catalog catalog to write to
+    default: workspace
+
+targets:
+  dev:
+    mode: development
+    default: true

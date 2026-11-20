@@ -1,0 +1,5 @@
+dispute_type,category,refer_to_law_firm
+neighbour,property,false
+consumer,contract,false
+motor,personal injury,true
+employment,employment,true

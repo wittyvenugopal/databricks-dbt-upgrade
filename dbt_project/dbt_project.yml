@@ -1,0 +1,33 @@
+# Small legal-expenses-insurance project written the "dbt 1.x way". It builds on dbt 1.12.
+# Every line marked "V2:" is something dbt v2 rejects or changes. See ../README.md.
+name: dbt_upgrade_lab
+version: "1.0.0"
+profile: dbt_upgrade_lab
+config-version: 2
+
+source-paths: ["models"]            # V2: renamed to model-paths
+data-paths: ["seeds"]               # V2: renamed to seed-paths
+target-path: "my_target"            # V2: not allowed here, use --target-path
+log-path: "my_logs"                 # V2: not allowed here, use --log-path
+clean-targets: ["my_target", "dbt_modules"]   # V2: dbt_modules is now dbt_packages
+
+flags:
+  warn_error_options:
+    include: [NoNodesForSelectionCriteria]    # V2: include -> error
+
+vars:
+  min_cover_gbp: 10000
+
+seeds:
+  dbt_upgrade_lab:
+    +schema: bronze
+
+models:
+  dbt_upgrade_lab:
+    staging:
+      materialized: view            # V2: needs the + prefix
+    marts:
+      +materialized: table
+      +owner_team: legal_data       # V2: custom config key, must move under meta
+    legacy:
+      +enabled: false

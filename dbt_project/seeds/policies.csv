@@ -1,0 +1,6 @@
+policy_id,customer_id,product,sales_channel,cover_limit_gbp,premium_pence,start_date,end_date,status,updated_at
+P1001,1,home legal,broker,50000,2999,2026-01-05,2027-01-04,active,2026-01-05 10:05:00
+P1002,2,motor legal,motor insurer,100000,1999,2026-02-11,2027-02-10,active,2026-02-11 09:40:00
+P1003,3,employment legal,solicitor,25000,4500,2026-03-20,2027-03-19,active,2026-03-20 14:20:00
+P1004,4,home legal,broker,50000,2999,2025-04-02,2026-04-01,lapsed,2026-04-02 08:50:00
+P1005,5,motor legal,online,5000,999,2026-05-14,2027-05-13,active,2026-05-14 12:05:00

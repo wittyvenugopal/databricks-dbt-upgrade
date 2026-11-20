@@ -1,0 +1,8 @@
+claim_id,policy_id,intake_channel,received_at,dispute_type,estimated_cost_pence
+C5001,P1001,helpline,2026-06-01 09:12:00,neighbour,120000
+C5002,P1002,online,2026-07-15 18:40:00,motor,450000
+C5003,P1003,helpline,2026-08-03 11:05:00,employment,800000
+C5004,P1004,helpline,2026-09-10 16:30:00,consumer,60000
+C5005,P1001,online,2026-10-21 08:00:00,consumer,95000
+C5006,P1002,helpline,2026-10-28 13:20:00,motor,210000
+C5007,P1003,online,2026-11-02 10:45:00,employment,150000

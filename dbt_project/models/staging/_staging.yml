@@ -1,0 +1,51 @@
+version: 2
+
+team_notes:                           # V2: custom top-level key
+  owner: legal_data
+
+pk_col: &pk_col                       # V2: standalone YAML anchor, must move under `anchors:`
+  name: policy_id
+  tests: [unique, not_null]
+
+sources:
+  - name: crm
+    schema: crm
+    freshness:                        # V2: freshness moves under config
+      warn_after: {count: 24, period: hour}
+    loaded_at_field: updated_at       # V2: moves under config
+    tables:
+      - name: customers_raw
+
+models:
+  - name: stg_customers
+    columns:
+      - name: customer_id
+        tests: [unique, not_null]     # V2: tests -> data_tests (still accepted, autofix leaves it)
+      - name: email
+        meta: {pii: true}             # V2: column meta moves under config
+
+  - name: stg_policies
+    description: Cleaned policies.
+    description: Cleaned policies, one row per policy.   # V2: duplicate key
+    tags: [silver]                    # V2: tags move under config
+    meta: {owner: legal_data}         # V2: meta moves under config
+    columns:
+      - *pk_col
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'LAPSED']             # V2: test arguments go under `arguments:`
+      - name: customer_id
+        tests:
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+      - name: premium_gbp
+        tests: [positive_value]       # custom generic test
+
+  - name: stg_claims
+    columns:
+      - name: claim_id
+        tests: [unique, not_null]
+      - name: dispute_category
+        tests: [not_null]             # every dispute type has a lookup row

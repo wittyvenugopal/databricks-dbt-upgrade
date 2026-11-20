@@ -1,0 +1,2 @@
+# dbt-autofix rewrites files with CRLF on Windows; keep the repo LF so diffs stay small.
+* text=auto eol=lf

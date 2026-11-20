@@ -1,0 +1,215 @@
+diff --git a/dbt_project/dbt_project.yml b/dbt_project/dbt_project.yml
+--- a/dbt_project/dbt_project.yml
++++ b/dbt_project/dbt_project.yml
+@@ -5,16 +5,13 @@
+ profile: dbt_upgrade_lab
+ config-version: 2
+ 
+-source-paths: ["models"]            # V2: renamed to model-paths
+-data-paths: ["seeds"]               # V2: renamed to seed-paths
+-target-path: "my_target"            # V2: not allowed here, use --target-path
+-log-path: "my_logs"                 # V2: not allowed here, use --log-path
+-clean-targets: ["my_target", "dbt_modules"]   # V2: dbt_modules is now dbt_packages
++clean-targets: ["my_target", "dbt_packages"]   # V2: dbt_modules is now dbt_packages
+ 
+ flags:
+   warn_error_options:
+-    include: [NoNodesForSelectionCriteria]    # V2: include -> error
++    error: [NoNodesForSelectionCriteria]
+ 
++  require_generic_test_arguments_property: true
+ vars:
+   min_cover_gbp: 10000
+ 
+@@ -25,9 +22,12 @@
+ models:
+   dbt_upgrade_lab:
+     staging:
+-      materialized: view            # V2: needs the + prefix
++      +materialized: view
+     marts:
+       +materialized: table
+-      +owner_team: legal_data       # V2: custom config key, must move under meta
++      +meta:
++        owner_team: legal_data
+     legacy:
+       +enabled: false
++seed-paths: ["seeds"]               # V2: renamed to seed-paths
++model-paths: ["models"]             # V2: renamed to model-paths
+\ No newline at end of file
+diff --git a/dbt_project/macros/clean_code.sql b/dbt_project/macros/clean_code.sql
+--- a/dbt_project/macros/clean_code.sql
++++ b/dbt_project/macros/clean_code.sql
+@@ -1,3 +1,3 @@
+ {# ' home legal ' -> 'HOME_LEGAL' #}
+ {% macro clean_code(col) %}upper(replace(trim({{ col }}), ' ', '_')){% endmacro %}
+-{% endmacro %}  {# V2: orphaned endmacro (v1 ignores it) #}
++  {# V2: orphaned endmacro (v1 ignores it) #}
+diff --git a/dbt_project/macros/owner_team.sql b/dbt_project/macros/owner_team.sql
+--- a/dbt_project/macros/owner_team.sql
++++ b/dbt_project/macros/owner_team.sql
+@@ -1,4 +1,4 @@
+ {# Reads the custom +owner_team config. V2: use config.meta_get('owner_team') #}
+ {% macro owner_team() %}
+-    '{{ config.get("owner_team", "unknown") }}'
++    '{{ config.meta_get("owner_team", "unknown") }}'
+ {% endmacro %}
+diff --git a/dbt_project/macros/product_channel_pairs.sql b/dbt_project/macros/product_channel_pairs.sql
+--- a/dbt_project/macros/product_channel_pairs.sql
++++ b/dbt_project/macros/product_channel_pairs.sql
+@@ -1,8 +1,10 @@
+-{# Every product x channel pair as a SELECT. V2: modules.itertools is removed - use two for loops #}
++{# Every product x channel pair as a SELECT. #}
+ {% macro product_channel_pairs(products, channels) %}
+     {% set rows = [] %}
+-    {% for p, c in modules.itertools.product(products, channels) %}
+-        {% do rows.append("select '" ~ p ~ "' as product, '" ~ c ~ "' as sales_channel") %}
++    {% for p in products %}
++        {% for c in channels %}
++            {% do rows.append("select '" ~ p ~ "' as product, '" ~ c ~ "' as sales_channel") %}
++        {% endfor %}
+     {% endfor %}
+     {{ return(rows | join(" union all ")) }}
+ {% endmacro %}
+diff --git a/dbt_project/models/marts/_marts.yml b/dbt_project/models/marts/_marts.yml
+--- a/dbt_project/models/marts/_marts.yml
++++ b/dbt_project/models/marts/_marts.yml
+@@ -8,7 +8,8 @@
+ 
+   - name: dim_policy
+     config:
+-      contains_pii: false             # V2: custom config key, must move under meta
++      meta:
++        contains_pii: false
+     columns:
+       - name: policy_sk
+         tests: [unique, not_null]
+@@ -21,16 +22,17 @@
+         description: '{{ doc("triage_outcome") }}'
+         tests:
+           - accepted_values:
+-              values: ['DECLINED', 'REFER_TO_LAW_FIRM', 'HELPLINE_ADVICE']
++              arguments:
++                values: ['DECLINED', 'REFER_TO_LAW_FIRM', 'HELPLINE_ADVICE']
+       - name: policy_sk
+         tests:
+-          - relationships: {to: ref('dim_policy'), field: policy_sk}
++          - relationships: {arguments: {to: ref('dim_policy'), field: policy_sk}}
+     tests:
+       - dbt_utils.expression_is_true:
+-          expression: "covered_cost_gbp <= estimated_cost_gbp"   # V2: arguments go under `arguments:`
+-
++          arguments:
++            expression: "covered_cost_gbp <= estimated_cost_gbp"
+ exposures:
+-  - name: Claims Dashboard            # V2: exposure names: letters, digits, _ only
++  - name: Claims_Dashboard            # V2: exposure names: letters, digits, _ only
+     type: dashboard
+     owner: {name: Claims BI, email: claims-bi@example.com}
+-    depends_on: [ref('claims_by_month')]
++    depends_on: [ref('claims_by_month')]
+\ No newline at end of file
+diff --git a/dbt_project/models/marts/dim_policy.sql b/dbt_project/models/marts/dim_policy.sql
+--- a/dbt_project/models/marts/dim_policy.sql
++++ b/dbt_project/models/marts/dim_policy.sql
+@@ -1,4 +1,7 @@
+-{{ config(materialized='table', pii_level='low') }}  -- V2: custom key in config(), must move under meta
++{{ config(
++    materialized='table', 
++    meta={'pii_level': 'low'}
++) }}  -- V2: custom key in config(), must move under meta
+ select
+     {{ dbt_utils.generate_surrogate_key(['p.policy_id']) }} as policy_sk,
+     p.policy_id,
+diff --git a/dbt_project/models/staging/_staging.yml b/dbt_project/models/staging/_staging.yml
+--- a/dbt_project/models/staging/_staging.yml
++++ b/dbt_project/models/staging/_staging.yml
+@@ -1,51 +1,60 @@
+ version: 2
+-
+-team_notes:                           # V2: custom top-level key
+-  owner: legal_data
+-
+-pk_col: &pk_col                       # V2: standalone YAML anchor, must move under `anchors:`
+-  name: policy_id
+-  tests: [unique, not_null]
+-
+ sources:
+   - name: crm
+     schema: crm
+-    freshness:                        # V2: freshness moves under config
+-      warn_after: {count: 24, period: hour}
+-    loaded_at_field: updated_at       # V2: moves under config
+     tables:
+       - name: customers_raw
+-
++    config:
++      freshness:
++        warn_after:
++          count: 24
++          period: hour
++      loaded_at_field: updated_at
+ models:
+   - name: stg_customers
+     columns:
+       - name: customer_id
+-        tests: [unique, not_null]     # V2: tests -> data_tests (still accepted, autofix leaves it)
++        tests:
++          - unique
++          - not_null
+       - name: email
+-        meta: {pii: true}             # V2: column meta moves under config
+-
++        config:
++          meta:
++            pii: true
+   - name: stg_policies
+-    description: Cleaned policies.
+-    description: Cleaned policies, one row per policy.   # V2: duplicate key
+-    tags: [silver]                    # V2: tags move under config
+-    meta: {owner: legal_data}         # V2: meta moves under config
++    description: Cleaned policies, one row per policy.
+     columns:
+-      - *pk_col
++      - name: policy_id
++        tests:
++          - unique
++          - not_null
+       - name: status
+         tests:
+           - accepted_values:
+-              values: ['ACTIVE', 'LAPSED']             # V2: test arguments go under `arguments:`
++              arguments:
++                values:
++                  - ACTIVE
++                  - LAPSED
+       - name: customer_id
+         tests:
+           - relationships:
+-              to: ref('stg_customers')
+-              field: customer_id
++              arguments:
++                to: ref('stg_customers')
++                field: customer_id
+       - name: premium_gbp
+-        tests: [positive_value]       # custom generic test
+-
++        tests:
++          - positive_value
++    config:
++      tags:
++        - silver
++      meta:
++        owner: legal_data
+   - name: stg_claims
+     columns:
+       - name: claim_id
+-        tests: [unique, not_null]
++        tests:
++          - unique
++          - not_null
+       - name: dispute_category
+-        tests: [not_null]             # every dispute type has a lookup row
++        tests:
++          - not_null
+\ No newline at end of file
